@@ -1,0 +1,157 @@
+---
+title: "Assignment 1"
+author: "Anuraag Vasal"
+date: "10/22/2021"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r}
+library(dplyr)  
+library(readr)
+Retailonline <- read.csv("Online_Retail.csv")
+```
+#The breakdown of the number of transactions by countries
+
+```{r}
+Retailonline_country  <- as.data.frame(table(Retailonline$Country))
+Retailonline_country["Percentage"] <- Retailonline_country$Freq/NROW(Retailonline) * 100
+names(Retailonline_country) <- c("Country","Count","Percentage")
+Retailonline_country[Retailonline_country$Percentage > 1,]
+```
+#Countries accounting for more than 1% of the total transactions
+EIRE,France,Germany and United Kingdom are the 4 countries that accounts for more than 1 % of total transactions.
+
+#Adding new variable ‘TransactionValue’ which is the product of the exising ‘Quantity’ and ‘UnitPrice’ variables.
+ 
+```{r}
+Retailonline["TransactionValue"] <- Retailonline$Quantity * Retailonline$UnitPrice
+head(Retailonline)
+```
+#Using the newly created variable, TransactionValue, showing the breakdown of transaction values by countries.
+```{r}
+Retailonline%>%group_by(Country)%>%summarise(Total=sum(TransactionValue))
+Retailonline_transactionwise <- Retailonline%>%group_by(Country)%>%summarise(Total=sum(TransactionValue))
+```
+#Countries with total transaction exceeding 130,000 British Pound. 
+```{r}
+Retailonline_transactionwise[Retailonline_transactionwise$Total>130000,]
+```
+#Converting ‘InvoiceDate’ into a POSIXlt object
+
+```{r}
+Temp <- strptime(Retailonline $ InvoiceDate,format='%m/%d/%Y %H:%M',tz='GMT')
+Retailonline$New_Invoice_Date <- as.Date(Temp)
+Retailonline$New_Invoice_Date[20000]- Retailonline$New_Invoice_Date[10]
+Retailonline$Invoice_Day_Week= weekdays(Retailonline$New_Invoice_Date)
+Retailonline$New_Invoice_Hour = as.numeric(format(Temp, "%H"))
+Retailonline$New_Invoice_Month = as.numeric(format(Temp, "%m"))
+```
+#Percentage of transactions (by numbers) by days of the week:
+
+```{r}
+Retailonline%>%group_by(Invoice_Day_Week)%>%summarise(count=n())%>%mutate(percentage=count/nrow(Retailonline)* 100) 
+```
+#The percentage of transactions (by transaction volume) by days of the week:
+
+```{r}
+Retailonline%>%group_by(Invoice_Day_Week)%>%summarise(Total=sum(TransactionValue))%>%mutate(percentage=Total/sum(Total)*100)
+```
+
+#The percentage of transactions (by transaction volume) by month of the year
+
+```{r}
+Retailonline%>%group_by(New_Invoice_Month)%>%summarise(Total=sum(TransactionValue))%>%mutate(percentage=Total/sum(Total)*100)
+
+```
+
+#The date with the highest number of transactions from Australia
+
+```{r}
+Retailonline%>%
+filter(Country=="Australia")%>%
+group_by(New_Invoice_Date)%>%
+tally(sort = TRUE)%>%  
+filter(n==max(n))
+```
+#The histogram of transaction values from Germany.
+```{r}
+Retailonline%>%
+group_by(Country)%>%
+filter(Country=="Germany")%>%
+group_by(New_Invoice_Month)%>%
+summarise(Total = sum(TransactionValue))-> Germany
+hist(Germany$Total,main = "Transaction Values from Germany", xlab = "Total amount per Month", ylab = "Frequency")
+```
+#Customer having the highest number of transactions:
+```{r}
+
+Retailonline%>%
+group_by(CustomerID)%>%
+tally(sort = TRUE)%>%
+filter(!is.na(CustomerID))%>%  
+filter(n==max(n))
+Retailonline%>%
+group_by(CustomerID)%>%
+summarise(Total=sum(TransactionValue))%>%
+filter(!is.na(CustomerID))%>%  
+filter(Total == max(Total))  
+```
+Customer with CustomerID 17841 has the highest number of transactions,and most valuable customer is CustomerID 14646 with spending of 279,489 Pounds.
+
+#The percentage of missing values for each variable in the dataset:
+```{r}
+colMeans(is.na(Retailonline) *100)
+```
+Here , we can see that the missing values are present in the column of Customer ID and Description. The percentage of missing values in Customer ID column is 24.92669 % and for Description it is 0.2683107 %.
+
+#The total number of transactions with missing CustomerID records by countries :
+```{r}
+NROW(Retailonline[is.na(Retailonline$CustomerID),])
+
+```
+The total number of rows in Customer ID column which have missing value is 135080
+
+```{r}
+Retailonline[is.na(Retailonline$CustomerID),] %>% group_by(Country) %>% summarise(count = n())
+```
+```{r}
+
+Retailonline %>%
+select(CustomerID,New_Invoice_Date)%>%
+group_by(CustomerID)%>%
+distinct(New_Invoice_Date)%>%
+arrange(desc(CustomerID))%>%
+mutate(DaysBetween = New_Invoice_Date - lag(New_Invoice_Date))-> Customerdaysbetweenvisit
+Customerdaysbetweenvisit%>%
+filter(!is.na(DaysBetween))-> Returningdaysbetweenvisits
+mean(Returningdaysbetweenvisits$DaysBetween)
+```
+#The return rate of the goods purchased by customers from France:
+
+```{r}
+Retailonline_france_cancel <- Retailonline%>%filter(Country=="France",Quantity<0)%>%count
+Retailonline_france_total <- Retailonline%>%filter(Country=="France")%>%count
+Retailonline_ratio <- Retailonline_france_cancel$n / Retailonline_france_total$n
+Retailonline_ratio * 100
+```
+The return rate for Customers of France is 1.741264 %
+
+#The product that has generated the highest revenue for the retailer:
+
+```{r}
+Retailonline%>%group_by(Description)%>%summarise(Total=sum(TransactionValue))%>%arrange((desc(Total)))
+```
+Doctom Postage is the product that has generated the highest revenue for the retailer.
+
+#Unique customers are represented in the dataset
+```{r}
+Retailonline_selectCustID <- Retailonline%>%select(CustomerID)%>%unique %>% nrow
+Retailonline_selectCustID
+```
+
+The total number of unique customers in the dataset is 4373
